@@ -796,6 +796,14 @@ EXPORT_CPP void _screenSize(S64* width, S64* height)
 
 EXPORT_CPP void _setClipboardStr(const U8* str)
 {
+	_openClipboard();
+	_emptyClipboard();
+	_setClipboardData((S64)CF_UNICODETEXT, str);
+	_closeClipboard();
+}
+
+EXPORT_CPP void _setClipboardData(S64 format, const U8* str)
+{
 	size_t len = static_cast<size_t>(*reinterpret_cast<const S64*>(str + 0x08));
 	{
 		const Char* ptr = reinterpret_cast<const Char*>(str + 0x10);
@@ -834,14 +842,47 @@ EXPORT_CPP void _setClipboardStr(const U8* str)
 		ASSERT(top + len == buf);
 		GlobalUnlock(handle);
 	}
+	SetClipboardData((int)format, static_cast<HANDLE>(handle));
+}
+
+EXPORT_CPP Bool _openClipboard()
+{
+	return OpenClipboard(nullptr) != FALSE;
+}
+
+EXPORT_CPP Bool _emptyClipboard()
+{
+	return EmptyClipboard() != FALSE;
+}
+
+EXPORT_CPP Bool _closeClipboard()
+{
+	return CloseClipboard() != FALSE;
+}
+
+EXPORT_CPP S64 _registerClipboardFormat(const U8* format_name)
+{
+	int result = RegisterClipboardFormat(reinterpret_cast<const Char*>(format_name + 0x10));
+	return static_cast<S64>(result);
+}
+
+EXPORT_CPP S64 _getClipboardFormatName(S64 format, U8* format_name, S64 max_len)
+{
+	Char* buf = static_cast<Char*>(AllocMem(sizeof(Char) * static_cast<size_t>(max_len)));
+	size_t len = GetClipboardFormatName(static_cast<int>(format), buf, (int)max_len);
+	*(S64*)(format_name + 0x00) = DefaultRefCntFunc;
+	*(S64*)(format_name + 0x08) = len;
+	memcpy(format_name + 0x10, buf, sizeof(Char) * (len + 1));
+	return static_cast<S64>(len);
+}
+
+EXPORT_CPP S64 _enumClipboardFormats(S64 format)
+{
 	if (OpenClipboard(nullptr) == 0)
-	{
-		GlobalFree(handle);
-		return;
-	}
-	EmptyClipboard();
-	SetClipboardData(CF_UNICODETEXT, static_cast<HANDLE>(handle));
+		return 0;
+	int result = EnumClipboardFormats((int)format);
 	CloseClipboard();
+	return static_cast<S64>(result);
 }
 
 EXPORT_CPP void _setOnKeyPress(void* onKeyPressFunc)
