@@ -570,15 +570,7 @@ end func
 			do me.delAreaStr()
 		else
 			do me.copyLineStr()
-			do me.del(me.cursorX, me.cursorY, 0, true) { for undoing }
-			do me.areaX :: 0
-			do me.areaY :: me.cursorY
-			var cursorX: int :: me.cursorX
-			do me.cursorX :: 0
-			do me.cursorY :+ 1
-			do me.delAreaStr()
-			do me.cursorX :: lib@min(cursorX, ^me.src.src[me.cursorY])
-			do me.del(me.cursorX, me.cursorY, 0, true) { for redoing }
+			do me.delLine(me.cursorX, me.cursorY, true)
 		end if
 		do me.interpret1SetDirty(me.cursorY, true, false)
 		do me.undo.recordEnd()
@@ -602,20 +594,13 @@ end func
 		if(str <>& null)
 			do me.undo.recordBegin()
 			var cursorX: int :: 0
-			if(isLineSelect())
-				if(!me.areaSel())
-					do me.del(me.cursorX, me.cursorY, 0, true) { for undoing }
-					do cursorX :: me.cursorX
-					do me.cursorX :: 0
-				end if
-			end if
 			if(me.areaSel())
 				do me.delAreaStr()
-			end if
-			do me.ins(me.cursorX, me.cursorY, str, true)
-			if(cursorX <> 0)
-				do me.cursorX :: lib@min(cursorX, ^me.src.src[me.cursorY])
-				do me.del(me.cursorX, me.cursorY, 0, true) { for redoing }
+				do me.ins(me.cursorX, me.cursorY, str, true)
+			elif(!isLineSelect())
+				do me.ins(me.cursorX, me.cursorY, str, true)
+			else
+				do me.insLine(me.cursorX, me.cursorY, str, true)
 			end if
 			do me.interpret1SetDirty(me.cursorY, true, false)
 			do me.undo.recordEnd()
@@ -667,22 +652,26 @@ end func
 	
 	+*func undoImpl(undo2: \doc@UndoCmd)
 		if(undo2 =$ UndoSrcIns)
-			block
-				var undo3: UndoSrcIns :: undo2 $ UndoSrcIns
-				do me.ins(undo3.x, undo3.y, undo3.str, false)
-			end block
+			var undo3: UndoSrcIns :: undo2 $ UndoSrcIns
+			do me.ins(undo3.x, undo3.y, undo3.str, false)
 		elif(undo2 =$ UndoSrcBsDel)
-			block
-				var undo3: UndoSrcBsDel :: undo2 $ UndoSrcBsDel
-				switch(undo3.kind)
-				case 0
-					do me.bs(undo3.x, undo3.y, undo3.len, false)
-				case 1
-					do me.del(undo3.x, undo3.y, undo3.len, false)
-				default
-					assert false
-				end switch
-			end block
+			var undo3: UndoSrcBsDel :: undo2 $ UndoSrcBsDel
+			switch(undo3.kind)
+			case 0
+				do me.bs(undo3.x, undo3.y, undo3.len, false)
+			case 1
+				do me.del(undo3.x, undo3.y, undo3.len, false)
+			default
+				assert false
+			end switch
+		elif(undo2 =$ UndoSrcInsLine)
+			var undo3: UndoSrcInsLine :: undo2 $ UndoSrcInsLine
+			do me.insLine(undo3.x, undo3.y, undo3.str, false)
+			do me.cursorX :: undo3.x
+			do me.cursorY :: undo3.y
+		elif(undo2 =$ UndoSrcDelLine)
+			var undo3: UndoSrcDelLine :: undo2 $ UndoSrcDelLine
+			do me.delLine(undo3.x, undo3.y, false)
 		else
 			assert false
 		end if
@@ -1205,6 +1194,17 @@ end func
 		+var len: int
 	end class
 	
+	class UndoSrcInsLine(UndoSrc)
+		+var x: int
+		+var y: int
+		+var str: []char
+	end class
+	
+	class UndoSrcDelLine(UndoSrc)
+		+var x: int
+		+var y: int
+	end class
+	
 	class UndoSrcReplaceAll(UndoSrc)
 		+var x: []int
 		+var y: []int
@@ -1634,6 +1634,29 @@ end func
 		do me.changed :: true
 	end func
 	
+	func insLine(x: int, y: int, str: []char, recordUndo: bool)
+		var redo: UndoSrcInsLine
+		if(recordUndo)
+			do redo :: #UndoSrcInsLine
+			do redo.doc :: me
+			do redo.x :: x
+			do redo.y :: y
+			do redo.str :: str
+		end if
+		do me.ins(0, y, str, false)
+		if(recordUndo)
+			var undo: UndoSrcDelLine :: #UndoSrcDelLine
+			do undo.doc :: me
+			do undo.x :: x
+			do undo.y :: y
+			do me.undo.add(undo, redo)
+		end if
+		do me.cursorX :: x
+		do me.cursorY :: y + 1
+		do me.absoluteX :: 0
+		do me.changed :: true
+	end func
+	
 	func bs(x: int, y: int, len: int, recordUndo: bool)
 		var redo: UndoSrcBsDel
 		if(recordUndo)
@@ -1722,6 +1745,46 @@ end func
 		do me.cursorY :: y
 		do me.absoluteX :: 0
 		do me.changed :: true
+	end func
+	
+	func delLine(x: int, y: int, recordUndo: bool)
+		var redo: UndoSrcDelLine
+		if(recordUndo)
+			do redo :: #UndoSrcDelLine
+			do redo.doc :: me
+			do redo.x :: x
+			do redo.y :: y
+		end if
+		var undoStr: []char :: me.src.src[y] ~ (y = ^me.src.src - 1 ?("", "\n"))
+		do me.del(0, y, ^me.src.src[y] + 1, false)
+		if(recordUndo)
+			var undo: UndoSrcInsLine :: #UndoSrcInsLine
+			do undo.doc :: me
+			do undo.x :: x
+			do undo.y :: y
+			do undo.str :: undoStr
+			do me.undo.add(undo, redo)
+		end if
+		do me.cursorX :: x
+		do me.cursorY :: y
+		do me.absoluteX :: 0
+		do me.changed :: true
+	end func
+	
+	func setUndoRedo()
+		var redo: UndoSrcBsDel :: #UndoSrcBsDel
+		do redo.doc :: me
+		do redo.kind :: 0
+		do redo.x :: me.cursorX
+		do redo.y :: me.cursorY
+		do redo.len :: 0
+		var undo: UndoSrcBsDel :: #UndoSrcBsDel
+		do undo.doc :: me
+		do undo.kind :: 0
+		do undo.x :: me.cursorX
+		do undo.y :: me.cursorY
+		do undo.len :: 0
+		do me.undo.add(undo, redo)
 	end func
 	
 	func scrollPageX(wheel: int)
