@@ -1072,6 +1072,24 @@ end func
 +func[d0001.knd, _setClipboardStr]setClipboardStr(str: []char)
 end func
 
++func[d0001.knd, _setClipboard]setClipboard(format: int, str: []bit8)
+end func
+
++func[d0001.knd, _openClipboard]openClipboard(): bool
+end func
+
++func[d0001.knd, _emptyClipboard]emptyClipboard(): bool
+end func
+
++func[d0001.knd, _closeClipboard]closeClipboard(): bool
+end func
+
++func[d0001.knd, _registerClipboardFormat]registerClipboardFormat(formatName: []char): int
+end func
+
++func[d0001.knd, _isClipboardFormatAvailable]isClipboardFormatAvailable(format: int): bool
+end func
+
 +func[d0001.knd, _setOnKeyPress]setOnKeyPress(onKeyPressFunc: func<(@Key, @ShiftCtrl): bool>)
 end func
 

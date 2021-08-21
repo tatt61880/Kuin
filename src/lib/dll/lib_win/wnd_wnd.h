@@ -58,5 +58,11 @@ EXPORT_CPP void* _openFileDialog(SClass* parent, const U8* filter, S64 defaultFi
 EXPORT_CPP void* _saveFileDialog(SClass* parent, const U8* filter, S64 defaultFilter, const U8* defaultExt);
 EXPORT_CPP void _screenSize(S64* width, S64* height);
 EXPORT_CPP void _setClipboardStr(const U8* str);
+EXPORT_CPP void _setClipboard(S64 format, const BYTE* str);
+EXPORT_CPP Bool _openClipboard();
+EXPORT_CPP Bool _emptyClipboard();
+EXPORT_CPP Bool _closeClipboard();
+EXPORT_CPP S64 _registerClipboardFormat(const U8* format_name);
+EXPORT_CPP Bool _isClipboardFormatAvailable (S64 format);
 EXPORT_CPP void _setOnKeyPress(void* onKeyPressFunc);
 EXPORT_CPP void* _sysDir(S64 kind);

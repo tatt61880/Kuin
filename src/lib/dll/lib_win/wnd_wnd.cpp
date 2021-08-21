@@ -805,20 +805,13 @@ EXPORT_CPP void _setClipboardStr(const U8* str)
 				len++;
 			ptr++;
 		}
+		len++;
 	}
-	HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE | GHND, sizeof(Char) * (len + 1));
-	if (handle == nullptr)
-		return;
+	Char* buf = (Char*)AllocMem(0x10 + sizeof(Char) * len);
 	{
-		const Char* ptr = reinterpret_cast<const Char*>(str + 0x10);
-		Char* buf = static_cast<Char*>(GlobalLock(handle));
-		if (buf == nullptr)
-		{
-			GlobalFree(handle);
-			return;
-		}
 		const Char* top = buf;
-		UNUSED(top);
+		buf = (Char*)((BYTE*)buf + 0x10);
+		const Char* ptr = reinterpret_cast<const Char*>(str + 0x10);
 		while (*ptr != L'\0')
 		{
 			if (*ptr == L'\n')
@@ -831,17 +824,62 @@ EXPORT_CPP void _setClipboardStr(const U8* str)
 			ptr++;
 		}
 		*buf = L'\0';
-		ASSERT(top + len == buf);
-		GlobalUnlock(handle);
+		buf++;
+		ASSERT(top + 0x10 + len == buf);
+		buf = (Char*)top;
+		(static_cast<S64*>((void*)buf))[1] = static_cast<S64>(sizeof(Char) * len);
 	}
 	if (OpenClipboard(nullptr) == 0)
-	{
-		GlobalFree(handle);
 		return;
-	}
 	EmptyClipboard();
-	SetClipboardData(CF_UNICODETEXT, static_cast<HANDLE>(handle));
+	_setClipboard((S64)CF_UNICODETEXT, (BYTE*)buf);
 	CloseClipboard();
+}
+
+EXPORT_CPP void _setClipboard(S64 format, const BYTE* bin)
+{
+	size_t len = static_cast<size_t>(*reinterpret_cast<const S64*>(bin + 0x08));
+	HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE | GHND, len);
+	if (handle == nullptr)
+		return;
+	{
+		const BYTE* ptr = reinterpret_cast<const BYTE*>(bin + 0x10);
+		BYTE* buf = static_cast<BYTE*>(GlobalLock(handle));
+		if (buf == nullptr)
+		{
+			GlobalFree(handle);
+			return;
+		}
+		memcpy(buf, ptr, len);
+		GlobalUnlock(handle);
+	}
+	SetClipboardData((int)format, static_cast<HANDLE>(handle));
+}
+
+EXPORT_CPP Bool _openClipboard()
+{
+	return OpenClipboard(nullptr) != FALSE;
+}
+
+EXPORT_CPP Bool _emptyClipboard()
+{
+	return EmptyClipboard() != FALSE;
+}
+
+EXPORT_CPP Bool _closeClipboard()
+{
+	return CloseClipboard() != FALSE;
+}
+
+EXPORT_CPP S64 _registerClipboardFormat(const U8* format_name)
+{
+	int result = RegisterClipboardFormat(reinterpret_cast<const Char*>(format_name + 0x10));
+	return static_cast<S64>(result);
+}
+
+EXPORT_CPP Bool _isClipboardFormatAvailable(S64 format)
+{
+	return IsClipboardFormatAvailable((int)format) != FALSE;
 }
 
 EXPORT_CPP void _setOnKeyPress(void* onKeyPressFunc)
